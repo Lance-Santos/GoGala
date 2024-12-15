@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Webhook;
 
-use App\Models\Event;
 use App\Models\Layouts;
 use Illuminate\Support\Str;
 use Illuminate\Http\Request;
@@ -85,7 +84,7 @@ class PayMongoWebhookController extends Controller
         ]);
 
         // Check if the event type is seating
-        if ($event->event_type !== 'seating') {
+        if ($event->event_type === 'seating') {
             foreach ($cartItems as $item) {
                 $ticketId = $item['ticket_id'];
                 $quantity = $item['quantity'];

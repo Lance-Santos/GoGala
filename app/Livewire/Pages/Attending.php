@@ -21,30 +21,42 @@ class Attending extends Component
     }
 
     public function loadAttendingEvents()
-    {
-        $query = PurchasedTicket::with(['event', 'ticket']) // Include ticket relationship
+{
+    $query = PurchasedTicket::with(['event', 'ticket']) // Include ticket relationship
         ->where('user_id', Auth::id());
 
-        if ($this->search) {
-            $query->whereHas('event', function ($q) {
-                $q->where('event_name', 'like', '%' . $this->search . '%');
-            });
-        }
+    if ($this->search) {
+        $query->whereHas('event', function ($q) {
+            $q->where('event_name', 'like', '%' . $this->search . '%');
+        });
+    }
 
-        if ($this->filter === 'Ended') {
-            $query->whereHas('event', function ($q) {
-                $q->where('hasEnded', true);
-            });
-        } elseif ($this->filter === 'Ongoing') {
-            $query->whereHas('event', function ($q) {
-                $q->where('hasEnded', false);
-            });
-        }
+    if ($this->filter === 'Ended') {
+        $query->whereHas('event', function ($q) {
+            $q->where('hasEnded', true);
+        });
+    } elseif ($this->filter === 'Ongoing') {
+        $query->whereHas('event', function ($q) {
+            $q->where('hasEnded', false);
+        });
+    }
+
+    $tickets = $query->get();
+
+    if ($tickets->isEmpty()) {
+        $this->attendingEvents = [];
+        return;
+    }
 
         $this->attendingEvents = $query->get()
             ->groupBy('event_id')
             ->map(function ($tickets) {
-                $event = $tickets->first()->event;
+                $firstTicket = $tickets->first();
+                $event = $firstTicket ? $firstTicket->event : null;
+
+                if (!$event) {
+                    return null; // Skip this group if the event is missing
+                }
 
                 return [
                     'id' => $event->id,
@@ -54,19 +66,30 @@ class Attending extends Component
                     'tickets_count' => $tickets->count(),
                     'event_img_banner' => $event->event_img_banner_url,
                     'tickets' => $tickets->map(function ($ticket) {
+                        $ticketData = $ticket->ticket;
+                        if (!$ticketData) {
+                            return null; // Skip tickets without data
+                        }
+
                         $qrCode = Builder::create()->data($ticket->qr_code)->size(300)->margin(10)->build();
+
                         return [
                             'id' => $ticket->id,
-                            'type' => $ticket->ticket->type,
-                            'price' => $ticket->ticket->price,
+                            'type' => $ticketData->type,
+                            'price' => $ticketData->price,
                             'is_verified' => $ticket->is_verified,
                             'seat_id' => $ticket->seat_id,
                             'qr_code' => $qrCode->getDataUri(),
                         ];
-                    })->toArray(),
+                    })->filter()->toArray(), // Filter out null tickets
                 ];
-            })->values()->toArray();
-    }
+            })
+            ->filter() // Remove null events
+            ->values()
+            ->toArray();
+
+}
+
     public function showQrCode($ticketId)
     {
         $ticket = PurchasedTicket::find($ticketId);
